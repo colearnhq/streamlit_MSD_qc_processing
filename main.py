@@ -236,6 +236,25 @@ with col1:
                 final_df.fillna(0, inplace=True)
                 final_df['total_count'] = final_df['exact_first_position'] + final_df['invalid_requests'] + final_df['tagged_minus2'] + final_df['tagged_all_10']
                 final_df['total_price'] = final_df['exact_price'] + final_df['invalid_price'] + final_df['neg2_price'] + final_df['all10_price']
+
+                invalid_user_mistakes = invalid_requests[invalid_requests['index']!=-1][['qa_user_id','request_id']].groupby('qa_user_id', as_index=False).nunique('request_id')
+                invalid_user_mistakes['request_id'] = 'Found'
+                invalid_user_mistakes.columns = ['qa_user_id','invalid_requests']
+
+                exact_reqs = exact_first_position['request_id'].values
+                exact_first_mistakes = dataset1[(dataset1['request_id'].isin(exact_reqs)) & (~dataset1['index'].isin([0,-1]))][['qa_user_id','qa_user_digit','request_id']].groupby(['qa_user_id','qa_user_digit'], as_index=False).nunique('request_id')
+                exact_first_mistakes = exact_first_mistakes[~exact_first_mistakes['qa_user_digit'].isin(old_way_users)]
+                exact_first_mistakes.drop('qa_user_digit', axis=1, inplace=True)
+                exact_first_mistakes['request_id'] = 'Found'
+                exact_first_mistakes.columns = ['qa_user_id','exact_first_position']
+
+                negative2 = neg2_requests['request_id'].values
+                neg2_mistakes = dataset1[(dataset1['request_id'].isin(negative2)) & (dataset1['index'] >= 0) & (dataset1['feedback_tags'] >= 4)][['qa_user_id','request_id']].groupby('qa_user_id', as_index=False).nunique('request_id')
+                neg2_mistakes['request_id'] = 'Found'
+                neg2_mistakes.columns = ['qa_user_id','tagged_minus2']
+
+                final_mistakes = pd.merge(invalid_user_mistakes, exact_first_mistakes, how='outer', on='qa_user_id')
+                final_mistakes = pd.merge(final_mistakes, neg2_mistakes, how='outer', on='qa_user_id')
                 
                 logger.info("QA User Billing Finish")
 
@@ -243,10 +262,10 @@ with col1:
                 all_file_ids.append(curr_id)
                 current_file = pd.DataFrame(all_file_ids, columns=['file_id'])
 
-                output_file_names = ['msd_data_'+str(curr_id)+'.csv', 'processed_file_id.csv']
-                output_files = [final_df, current_file]
+                output_file_names = [f'qa_user_request_count_{curr_id}.csv', 'processed_file_id.csv', f'users_not_following_rule_{curr_id}.csv']
+                output_files = [final_df, current_file, final_mistakes]
 
-                for i in range(2):
+                for i in range(3):
                     try:
                         with StringIO() as csv_buffer:
                             output_files[i].to_csv(csv_buffer, index=False)
@@ -288,7 +307,6 @@ with col1:
             except Exception as e:
                 print(e)
 
-
 with col2:
     st.download_button('Download RAW', convert_df(raw_dataset), file_name='raw_msd.csv', mime='text/csv', key='raw')
 
@@ -298,22 +316,29 @@ st.header("")
 st.header("")
 st.header("Download Processed File")
 dwn_file_id = st.text_input("Type in file id to download deeplink processed file")
+dwn_file_type = st.radio("Choose file to download", ['QA User Request Count', 'Users Not Following Rule'], index=0)
 
 if dwn_file_id != "":
-    dwn_file_name = 'msd_data_'+str(dwn_file_id)+'.csv'
-    dwn_file = destination_prefix + dwn_file_name
-
     try:
+        if dwn_file_type == 'QA User Request Count':
+            dwn_file_name = f'qa_user_request_count_{dwn_file_id}.csv'
+        elif dwn_file_type == 'Users Not Following Rule':
+            dwn_file_name = f'users_not_following_rule_{dwn_file_id}.csv'
+        else:
+            dwn_file_name = None
+            raise Exception("Wrong Option")
+            
+        dwn_file = destination_prefix + dwn_file_name
         obj = client.get_object(Bucket= destination_bucket, Key= dwn_file)
         dwn_data = pd.read_csv(obj['Body']) # 'Body' is a key word
         csv = convert_df(dwn_data)
 
         st.download_button(
-            label="Download Result",
+            label="Download",
             data=csv,
-            file_name='msd-data_result'+str(dwn_file_id)+'.csv',
+            file_name=dwn_file_name,
             mime='text/csv',
         )
-    
+
     except:
         st.error("File ID not found in S3")
