@@ -139,8 +139,6 @@ with col1:
                 undefined_user_list = ["VUEFIND_undefined", "VUEFIND_null"]
                 undefined_user = dataset[dataset['qa_user_id'].isin(undefined_user_list)]
                 dataset = dataset[~dataset['qa_user_id'].isin(undefined_user_list)]
-                dataset['qa_user_digit'] = dataset['qa_user_id'].map(lambda x: int(x.split('_')[-1]))
-                undefined_user['qa_user_digit'] = undefined_user['qa_user_id'].map(lambda x: x.split('_')[-1])
                 dataset = pd.concat([dataset, undefined_user])
 
                 # copy tagging data from index = -1 to all index
@@ -179,9 +177,7 @@ with col1:
 
                 dataset1['in_combined_invalid'] = in_combined_invalid
 
-                old_way_users = [18, 41, 49, 23, 32, 63, 78, 50, 37, 28, 45, 54, 59, 64, 81, 94]
                 exact_first_position = dataset1[(dataset1['index']==0) & (dataset1['feedback_tags']==5) & (dataset1['in_combined_invalid']==False)]
-                exact_first_position = exact_first_position[~exact_first_position['qa_user_digit'].isin(old_way_users)]
 
                 # tagged -2 index
                 exact_invalid = pd.concat([exact_first_position, invalid_requests], axis=0)
@@ -242,9 +238,7 @@ with col1:
                 invalid_user_mistakes.columns = ['qa_user_id','invalid_requests']
 
                 exact_reqs = exact_first_position['request_id'].values
-                exact_first_mistakes = dataset1[(dataset1['request_id'].isin(exact_reqs)) & (~dataset1['index'].isin([0,-1]))][['qa_user_id','qa_user_digit','request_id']].groupby(['qa_user_id','qa_user_digit'], as_index=False).nunique('request_id')
-                exact_first_mistakes = exact_first_mistakes[~exact_first_mistakes['qa_user_digit'].isin(old_way_users)]
-                exact_first_mistakes.drop('qa_user_digit', axis=1, inplace=True)
+                exact_first_mistakes = dataset1[(dataset1['request_id'].isin(exact_reqs)) & (~dataset1['index'].isin([0,-1]))][['qa_user_id','request_id']].groupby(['qa_user_id'], as_index=False).nunique('request_id')
                 exact_first_mistakes['request_id'] = 'Found'
                 exact_first_mistakes.columns = ['qa_user_id','exact_first_position']
 
